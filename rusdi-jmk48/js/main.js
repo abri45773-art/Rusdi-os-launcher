@@ -1,210 +1,285 @@
-// Rusdi jmk48 OS - Main Entry Point
+// Rusdi OS Launcher — Space Edition · Main Entry
 document.addEventListener('DOMContentLoaded', () => {
   const boot = document.getElementById('boot-screen');
   const lock = document.getElementById('lock-screen');
-  const desktop = document.getElementById('desktop');
+  const home = document.getElementById('home-screen');
+  const drawer = document.getElementById('app-drawer');
+  const controlCenter = document.getElementById('control-center');
 
-  // Boot sequence
+  /* ===== STARFIELD ANIMATION ===== */
+  const canvas = document.getElementById('starfield');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+  const STAR_COUNT = 150;
+
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  function initStars() {
+    stars = [];
+    for (let i = 0; i < STAR_COUNT; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.5 + 0.3,
+        speed: Math.random() * 0.3 + 0.05,
+        twinkle: Math.random() * Math.PI * 2,
+        twinkleSpeed: Math.random() * 0.02 + 0.005
+      });
+    }
+  }
+  initStars();
+
+  function drawStars() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      s.twinkle += s.twinkleSpeed;
+      const alpha = 0.5 + Math.sin(s.twinkle) * 0.5;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.shadowColor = '#fff';
+      ctx.shadowBlur = s.r * 3;
+      ctx.fill();
+      // slow drift
+      s.y += s.speed;
+      if (s.y > canvas.height) { s.y = 0; s.x = Math.random() * canvas.width; }
+    });
+    ctx.shadowBlur = 0;
+    requestAnimationFrame(drawStars);
+  }
+  drawStars();
+
+  /* ===== BOOT SEQUENCE ===== */
+  const bootHints = ['Menjelajahi galaksi...', 'Menginisialisasi nebula...', 'Memuat bintang...', 'Menyiapkan peluncuran...'];
+  let hintIdx = 0;
+  const hintEl = document.getElementById('boot-hint');
+  const hintInterval = setInterval(() => {
+    hintIdx = (hintIdx + 1) % bootHints.length;
+    hintEl.textContent = bootHints[hintIdx];
+  }, 700);
+
   setTimeout(() => {
-    boot.classList.add('hidden');
-    lock.classList.remove('hidden');
-    updateLockClock();
-  }, 2500);
+    clearInterval(hintInterval);
+    boot.style.transition = 'opacity 0.6s';
+    boot.style.opacity = '0';
+    setTimeout(() => {
+      boot.classList.add('hidden');
+      lock.classList.remove('hidden');
+      updateLockClock();
+    }, 600);
+  }, 3000);
 
-  // Lock screen clock
+  /* ===== CLOCKS ===== */
   function updateLockClock() {
     const d = new Date();
     document.getElementById('lock-time').textContent = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     document.getElementById('lock-date').textContent = d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+    document.getElementById('cw-time').textContent = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('cw-date').textContent = d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+    document.getElementById('status-time').textContent = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   }
   setInterval(updateLockClock, 1000);
 
-  // Unlock
+  /* ===== LOCK SCREEN UNLOCK ===== */
   const unlockBtn = document.getElementById('lock-unlock');
   let touchStartY = 0;
 
   const unlock = () => {
-    lock.classList.add('hidden');
-    desktop.classList.remove('hidden');
-    initDesktop();
+    lock.style.transition = 'opacity 0.4s, transform 0.4s';
+    lock.style.opacity = '0';
+    lock.style.transform = 'translateY(-100%)';
+    setTimeout(() => {
+      lock.classList.add('hidden');
+      home.classList.remove('hidden');
+      initHome();
+    }, 400);
   };
 
   unlockBtn.addEventListener('click', unlock);
-  unlockBtn.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; });
-  unlockBtn.addEventListener('touchend', (e) => {
+  lock.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  lock.addEventListener('touchend', (e) => {
     const dy = touchStartY - e.changedTouches[0].clientY;
-    if (dy > 50) unlock();
+    if (dy > 80) unlock();
   });
 
-  // Taskbar clock
-  function updateTaskbarClock() {
-    const d = new Date();
-    document.getElementById('taskbar-clock').textContent = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-  }
-  setInterval(updateTaskbarClock, 1000);
-  updateTaskbarClock();
-
-  // Desktop initialization
-  function initDesktop() {
-    renderDesktopIcons();
-    renderStartMenu();
-    setupStartMenu();
-    setupContextMenu();
+  /* ===== HOME SCREEN ===== */
+  function initHome() {
+    renderAppGrid();
+    renderDock();
+    setupSearch();
+    setupDrawer();
+    setupControlCenter();
+    setupSwipeGestures();
     loadSettings();
+    updateLockClock();
   }
 
-  // Desktop icons
-  function renderDesktopIcons() {
-    const container = document.getElementById('desktop-icons');
-    container.innerHTML = DESKTOP_ICONS.map(key => {
-      const app = APPS[key];
-      return `
-        <div class="desktop-icon" data-app="${key}">
-          <div class="icon-emoji">${app.icon}</div>
-          <div class="icon-label">${app.name}</div>
-        </div>
-      `;
-    }).join('');
-
-    container.querySelectorAll('.desktop-icon').forEach(icon => {
-      icon.addEventListener('dblclick', () => WM.open(APPS[icon.dataset.app]));
-      icon.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        if (icon.dataset.lastTap && Date.now() - icon.dataset.lastTap < 300) {
-          WM.open(APPS[icon.dataset.app]);
-        }
-        icon.dataset.lastTap = Date.now();
-      });
-    });
-  }
-
-  // Start menu
-  function renderStartMenu(filter = '') {
-    const container = document.getElementById('start-apps');
-    const filtered = Object.entries(APPS).filter(([key, app]) =>
-      app.name.toLowerCase().includes(filter.toLowerCase())
-    );
-    container.innerHTML = filtered.map(([key, app]) => `
-      <div class="start-app" data-app="${key}">
-        <div class="icon-emoji">${app.icon}</div>
-        <div class="app-name">${app.name}</div>
+  function appIconHtml(app, key) {
+    return `
+      <div class="app-icon" data-app="${key}">
+        <div class="app-icon-tile ${app.glow||''} ${app.gradient||''}">${app.icon}</div>
+        <div class="app-icon-name">${app.name}</div>
       </div>
-    `).join('');
+    `;
+  }
 
-    container.querySelectorAll('.start-app').forEach(app => {
-      app.onclick = () => {
-        WM.open(APPS[app.dataset.app]);
-        document.getElementById('start-menu').classList.add('hidden');
-        document.getElementById('start-btn').classList.remove('active');
-      };
+  function renderAppGrid(filter = '') {
+    const container = document.getElementById('app-grid');
+    const apps = HOME_APPS.filter(k => APPS[k].name.toLowerCase().includes(filter.toLowerCase()));
+    container.innerHTML = apps.map(k => appIconHtml(APPS[k], k)).join('');
+    container.querySelectorAll('.app-icon').forEach(icon => {
+      icon.addEventListener('click', () => WM.openApp(APPS[icon.dataset.app]));
     });
   }
 
-  function setupStartMenu() {
-    const startBtn = document.getElementById('start-btn');
-    const startMenu = document.getElementById('start-menu');
-    const search = document.getElementById('search-input');
-
-    startBtn.onclick = (e) => {
-      e.stopPropagation();
-      const isHidden = startMenu.classList.contains('hidden');
-      startMenu.classList.toggle('hidden');
-      startBtn.classList.toggle('active', isHidden);
-      if (isHidden) search.focus();
-    };
-
-    search.oninput = () => renderStartMenu(search.value);
-
-    document.addEventListener('click', (e) => {
-      if (!startMenu.contains(e.target) && e.target !== startBtn) {
-        startMenu.classList.add('hidden');
-        startBtn.classList.remove('active');
-      }
+  function renderDock() {
+    const container = document.getElementById('dock');
+    container.innerHTML = DOCK_APPS.map(k => appIconHtml(APPS[k], k)).join('');
+    container.querySelectorAll('.app-icon').forEach(icon => {
+      icon.addEventListener('click', () => WM.openApp(APPS[icon.dataset.app]));
     });
-
-    // Power button
-    document.getElementById('power-btn').onclick = () => {
-      if (confirm('Matikan Rusdi jmk48 OS?')) {
-        document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#000;color:#fff;font-size:20px">Sistem telah dimatikan. Refresh untuk menyalakan kembali.</div>';
-      }
-    };
   }
 
-  // Context menu
-  function setupContextMenu() {
-    const ctx = document.getElementById('context-menu');
-    desktop.addEventListener('contextmenu', (e) => {
-      if (e.target.closest('.window') || e.target.closest('#taskbar')) return;
-      e.preventDefault();
-      ctx.innerHTML = `
-        <div class="ctx-item" data-act="refresh">🔄 Refresh</div>
-        <div class="ctx-item" data-act="wallpaper">🖼️ Ganti Wallpaper</div>
-        <div class="ctx-item" data-act="about">ℹ️ Tentang Rusdi</div>
-      `;
-      ctx.style.left = Math.min(e.clientX, window.innerWidth - 170) + 'px';
-      ctx.style.top = Math.min(e.clientY, window.innerHeight - 140) + 'px';
-      ctx.classList.remove('hidden');
+  /* ===== SEARCH ===== */
+  function setupSearch() {
+    const searchInput = document.getElementById('search-input');
+    searchInput.addEventListener('input', () => renderAppGrid(searchInput.value));
+    searchInput.addEventListener('focus', () => openDrawer());
+  }
 
-      ctx.querySelectorAll('.ctx-item').forEach(item => {
-        item.onclick = () => {
-          ctx.classList.add('hidden');
-          if (item.dataset.act === 'refresh') location.reload();
-          else if (item.dataset.act === 'wallpaper') WM.open(APPS.settings);
-          else if (item.dataset.act === 'about') WM.open(APPS.about);
-        };
+  /* ===== APP DRAWER ===== */
+  function openDrawer() {
+    renderDrawerGrid();
+    drawer.classList.remove('hidden');
+  }
+  function closeDrawer() { drawer.classList.add('hidden'); }
+
+  function renderDrawerGrid(filter = '') {
+    const container = document.getElementById('drawer-grid');
+    const apps = DRAWER_APPS.filter(k => APPS[k].name.toLowerCase().includes(filter.toLowerCase()));
+    container.innerHTML = apps.map(k => appIconHtml(APPS[k], k)).join('');
+    container.querySelectorAll('.app-icon').forEach(icon => {
+      icon.addEventListener('click', () => {
+        WM.openApp(APPS[icon.dataset.app]);
+        closeDrawer();
       });
     });
-
-    document.addEventListener('click', () => ctx.classList.add('hidden'));
   }
 
-  // Load saved settings
-  function loadSettings() {
-    const saved = JSON.parse(localStorage.getItem('rusdi-settings') || '{}');
-    if (saved.wallpaper !== undefined) {
-      const wallpapers = [
-        'linear-gradient(135deg, #0f172a, #1e3a5f, #1e1b4b)',
-        'linear-gradient(135deg, #134e4a, #0f172a)',
-        'linear-gradient(135deg, #7c2d12, #1e1b4b)',
-        'linear-gradient(135deg, #1e293b, #334155)',
-        'linear-gradient(135deg, #4c1d95, #1e1b4b)',
-        'linear-gradient(135deg, #064e3b, #0f172a)',
-      ];
-      document.getElementById('desktop').style.background = wallpapers[saved.wallpaper];
-    }
+  function setupDrawer() {
+    document.getElementById('drawer-search').addEventListener('input', (e) => renderDrawerGrid(e.target.value));
+    // tap outside to close
+    drawer.addEventListener('click', (e) => {
+      if (e.target === drawer) closeDrawer();
+    });
   }
 
-  // Prevent context menu on long press (mobile)
-  let touchTimer;
+  /* ===== CONTROL CENTER ===== */
+  function setupControlCenter() {
+    controlCenter.addEventListener('click', (e) => {
+      if (e.target === controlCenter) {
+        controlCenter.classList.add('hidden');
+        return;
+      }
+      const tile = e.target.closest('.cc-tile');
+      if (tile && !tile.querySelector('input')) {
+        tile.classList.toggle('active');
+      }
+    });
+  }
+  function openControlCenter() { controlCenter.classList.remove('hidden'); }
+  function closeControlCenter() { controlCenter.classList.add('hidden'); }
+
+  /* ===== SWIPE GESTURES ===== */
+  function setupSwipeGestures() {
+    let startX = 0, startY = 0;
+    home.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+
+    home.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      const absX = Math.abs(dx), absY = Math.abs(dy);
+      if (absY > 80 && absY > absX) {
+        if (dy < 0 && startY > window.innerHeight / 2) {
+          // swipe up from bottom -> open drawer
+          openDrawer();
+        } else if (dy > 0 && startY < 100) {
+          // swipe down from top -> open control center
+          openControlCenter();
+        }
+      }
+    });
+
+    // Swipe down in drawer to close
+    let dStartY = 0;
+    drawer.addEventListener('touchstart', (e) => { dStartY = e.touches[0].clientY; }, { passive: true });
+    drawer.addEventListener('touchend', (e) => {
+      if (e.changedTouches[0].clientY - dStartY > 80) closeDrawer();
+    });
+
+    // Swipe down in control center to close
+    let cStartY = 0;
+    controlCenter.addEventListener('touchstart', (e) => { cStartY = e.touches[0].clientY; }, { passive: true });
+    controlCenter.addEventListener('touchend', (e) => {
+      if (e.changedTouches[0].clientY - cStartY > 80) closeControlCenter();
+    });
+  }
+
+  /* ===== APP VIEW BACK BUTTON ===== */
+  document.getElementById('av-back').addEventListener('click', () => WM.back());
+
+  /* ===== LONG PRESS CONTEXT MENU ===== */
+  let pressTimer;
   document.addEventListener('touchstart', (e) => {
-    if (e.target.closest('.window') || e.target.closest('#taskbar')) return;
-    touchTimer = setTimeout(() => {
-      const touch = e.touches[0];
-      const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY, target: e.target, preventDefault: () => {} };
-      // Trigger context menu
+    const icon = e.target.closest('.app-icon');
+    if (!icon) return;
+    pressTimer = setTimeout(() => {
       const ctx = document.getElementById('context-menu');
+      const app = APPS[icon.dataset.app];
       ctx.innerHTML = `
-        <div class="ctx-item" data-act="refresh">🔄 Refresh</div>
-        <div class="ctx-item" data-act="wallpaper">🖼️ Ganti Wallpaper</div>
-        <div class="ctx-item" data-act="about">ℹ️ Tentang Rusdi</div>
+        <div class="ctx-item" data-act="open">🚀 Buka ${app.name}</div>
+        <div class="ctx-item" data-act="info">ℹ️ Info Aplikasi</div>
       `;
-      ctx.style.left = Math.min(touch.clientX, window.innerWidth - 170) + 'px';
-      ctx.style.top = Math.min(touch.clientY, window.innerHeight - 140) + 'px';
+      const touch = e.touches[0];
+      ctx.style.left = Math.min(touch.clientX, window.innerWidth - 200) + 'px';
+      ctx.style.top = Math.min(touch.clientY, window.innerHeight - 120) + 'px';
       ctx.classList.remove('hidden');
       ctx.querySelectorAll('.ctx-item').forEach(item => {
         item.onclick = () => {
           ctx.classList.add('hidden');
-          if (item.dataset.act === 'refresh') location.reload();
-          else if (item.dataset.act === 'wallpaper') WM.open(APPS.settings);
-          else if (item.dataset.act === 'about') WM.open(APPS.about);
+          if (item.dataset.act === 'open') WM.openApp(app);
         };
       });
     }, 600);
-  });
-  document.addEventListener('touchend', () => clearTimeout(touchTimer));
-  document.addEventListener('touchmove', () => clearTimeout(touchTimer));
+  }, { passive: true });
+  document.addEventListener('touchend', () => clearTimeout(pressTimer));
+  document.addEventListener('touchmove', () => clearTimeout(pressTimer));
+  document.addEventListener('click', () => document.getElementById('context-menu').classList.add('hidden'));
 
-  // Register service worker for PWA
+  /* ===== LOAD SETTINGS ===== */
+  function loadSettings() {
+    const saved = JSON.parse(localStorage.getItem('rusdi-settings') || '{}');
+    if (saved.wallpaper !== undefined) {
+      const wps = [
+        'linear-gradient(135deg,#05010f,#1a0a3e,#4c1d95)',
+        'linear-gradient(135deg,#0a0524,#064e3b)',
+        'linear-gradient(135deg,#1e1b4b,#831843)',
+        'linear-gradient(135deg,#0c0a1e,#312e81)',
+        'linear-gradient(135deg,#020617,#4c1d95,#831843)',
+      ];
+      document.body.style.background = wps[saved.wallpaper];
+    }
+  }
+
+  /* ===== SERVICE WORKER ===== */
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
