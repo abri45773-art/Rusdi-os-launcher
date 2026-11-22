@@ -1,0 +1,8 @@
+{
+  "appId": "id.rusdi.os.launcher",
+  "appName": "Rusdi os launcher",
+  "webDir": "rusdi-jmk48",
+  "server": {
+    "androidScheme": "https"
+  }
+}
