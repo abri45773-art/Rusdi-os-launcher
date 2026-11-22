@@ -1,0 +1,14 @@
+# Dependensi
+node_modules/
+
+# Hasil build Android (dibuat oleh `npx cap add android` dan Gradle)
+android/
+*.apk
+*.aab
+
+# Sistem & editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
