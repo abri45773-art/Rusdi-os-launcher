@@ -1,5 +1,5 @@
-// Rusdi jmk48 OS - Service Worker
-const CACHE = 'rusdi-jmk48-v1';
+// Rusdi OS Launcher — Space Edition Service Worker
+const CACHE = 'rusdi-os-space-v2';
 const ASSETS = [
   './',
   './index.html',
